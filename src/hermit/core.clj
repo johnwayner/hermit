@@ -1,16 +1,12 @@
-(ns hermit.core)
+(ns hermit.core
+  (:require (clojure.contrib (io :as io))))
 
-(def registers {
-              :a 0,
-              :b 0,
-              :c 0,
-              :x 0,
-              :y 0,
-              :z 0,
-              :i 0,
-              :j 0,
-              :o 0,
-              :sp 0,
-              :pc 0,
-                })
+(defn- byte-pair-to-word [p]
+                       (bit-or (bit-shift-left (bit-and 0xFF (second p)) 8)
+                               (bit-and 0xFF (first p))))
 
+
+(defn file-to-words
+  "Returns a vector of words (2 bytes) read from file-name"
+  [file-name] (map byte-pair-to-word
+                   (partition 2 (io/to-byte-array (io/file file-name)))))

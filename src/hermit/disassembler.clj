@@ -1,5 +1,5 @@
 (ns hermit.disassembler
-  (:require (clojure.contrib (io :as io))))
+  (:use (hermit core)))
 
 (def ops [:ext
           :set
@@ -15,7 +15,7 @@
 
                     :a-ptr-nxt :b-ptr-nxt :c-ptr-nxt
                     :x-ptr-nxt :y-ptr-nxt :z-ptr-nxt
-                    :i-ptr-nxt :j-ptr
+                    :i-ptr-nxt :j-ptr-nxt
 
                     :pop :peek :push
 
@@ -64,6 +64,12 @@
                 (op-val w  (if (= :jsr o) 0 6)))
             b (if (or (= :unk o) (= :jsr o)) nil (op-val w 0))]
         {:op o, :a a, :b b, :w w}))
+
+(defn instruction-size
+  "Returns the number of words this instruction consumes (1-3)."
+  [i] (reduce #(+ %1 (if %2 1 0)) 1
+              [(op-val-reads-next (:a i))
+               (op-val-reads-next (:b i))]))
 
 (defn instr-needs-next
   "Returns true if instruction i has a val that reads next word."
@@ -127,11 +133,6 @@
                []
                ws))
 
-(defn byte-pair-to-word [p]
-                       (bit-or (bit-shift-left (bit-and 0xFF (second p)) 8)
-                               (bit-and 0xFF (first p))))
-
 (defn disassemble-file
   "Slurp a file and diassemble it."
-  [file-name] (disassemble (map byte-pair-to-word
-                               (partition 2 (io/to-byte-array (io/file file-name))))))
+  [file-name] (disassemble (file-to-words file-name)))
