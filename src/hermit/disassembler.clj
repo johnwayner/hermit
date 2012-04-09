@@ -110,18 +110,19 @@
 
 
 (defn instr-to-str
-  "Returns a string representation of instruction i."
-  [i] (str (name (:op i))
-           " "
-           (op-val-to-str (:a i))
-           (let [b (:b i)]
-             (if b (str ", " (op-val-to-str b))))
-           "  ; "
-           (reduce #(str % (if %2 (str "0x" (Integer/toHexString %2) " ")))
-                   ""
-                   [(:w i)
-                    (:nxt (:a i))
-                    (:nxt (:b i))])))
+  "Returns a string representation of instruction i (and comment mem if c)."
+  ([i c] (str (name (:op i))
+               " "
+               (op-val-to-str (:a i))
+               (let [b (:b i)]
+                 (if b (str ", " (op-val-to-str b))))
+               (if c (str "  ; "
+                          (reduce #(str % (if %2 (str "0x" (Integer/toHexString %2) " ")))
+                                  ""
+                                  [(:w i)
+                                   (:nxt (:a i))
+                                   (:nxt (:b i))])))))
+  ([i] (instr-to-str i true)))
 
 (defn disassemble
   "Returns decoded instructions for each word in ws."
