@@ -25,7 +25,7 @@
 
                     :ptr-nxt
                     :nxt]
-                   (repeat 0x1f :literal-20)))
+                   (repeat 0x20 :literal-20)))
 
 
 (defn op
