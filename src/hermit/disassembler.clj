@@ -1,12 +1,12 @@
 (ns hermit.disassembler
   (:use (hermit core)))
 
-(def ops [:ext
-          :set
-          :add :sub :mul :div :mod
-          :shl :shr
-          :and :bor :xor
-          :ife :ifn :ifg :ifb])
+(def ops [[:ext 0]
+          [:set 1]
+          [:add 2] [:sub 2] [:mul 2] [:div 3] [:mod 3]
+          [:shl 2] [:shr 2]
+          [:and 1] [:bor 1] [:xor 1]
+          [:ife 2] [:ifn 2] [:ifg 2] [:ifb 2]])
 (def ops-exts [:ext :jsr])
 
 (def op-vals (into [:a :b :c :x :y :z :i :j
@@ -30,7 +30,7 @@
 
 (defn op
   "Get operator from word."
-  [w] (let [op (ops (bit-and 0xF w))]
+  [w] (let [[op cyc-count] (ops (bit-and 0xF w))]
         (if (= :ext op)
           (let [ext-idx (bit-shift-right (bit-and 2r0000001111110000 w) 4)]
             (if (< ext-idx (count ops-exts))

@@ -4,8 +4,33 @@
   (:import [java.util.concurrent Executors])
   (:gen-class))
 
+(def video-ram-loc 0x8000)
+(def video-display-width 32)
+(def video-display-height 16)
+
 (def cpu (atom init-machine))
 (def run-future nil)
+
+(defn printable-char?
+  [c]
+  (if (and (> (int c) 32)
+	   (< (int c) 127))
+    (char c)))
+
+(defn display-video
+  [f m] (config! (select f [:#txtvideo]) :text
+                 (apply str
+                        (interleave (map #(reduce (fn [a b] (if (printable-char? (bit-and 0xFF b))
+                                                             (str a (char  (bit-and 0xFF b))) 
+                                                    (str a " ")))
+                                                  ""
+                                                  %) 
+                                         (partition video-display-width
+                                                    (mem-val m
+                                                             video-ram-loc
+                                                             (* video-display-height
+                                                                video-display-width))))
+                                    (repeat "\n")))))
 
 (defn make-reg-panel
   [title id] (horizontal-panel :items [(label title) (label :text "0x0000"
@@ -29,11 +54,7 @@
                      :#reg-i :#reg-j :#reg-pc
                      :#reg-sp :#reg-o])))
 
-(defn printable-char?
-  [c]
-  (if (and (> (int c) 32)
-	   (< (int c) 127))
-    (char c)))
+
 
 (defn display-mem
   [f m] (config! (select f [:#mem])
@@ -45,7 +66,7 @@
                                      (get-mem-display %2) ": "
                                      (get-mem-display (mem-val m %2))
                                      "  '"
-                                     (let [c (char (mem-val m %2))]
+                                     (let [c (char (bit-and 0xFF (mem-val m %2)))]
                                        (if (printable-char? c)
                                          c
                                          " "))
@@ -59,7 +80,8 @@
 (defn update-display
   [f m] (do
           (display-regs f m)
-          (display-mem f m)))
+          (display-mem f m)
+          (display-video f m)))
 
 (defn setup-ui
   "Creates the UI."
@@ -74,10 +96,15 @@
              step-button (button :text "Step")
              reset-button (button :text "Reset")
              memory-text (scrollable (text :multi-line? true
+                                           :editable? false
                                            :font "MONOSPACED-PLAIN-14"
                                            :id :mem))
              video-output (canvas :size [250 :by 250]
                                   :id :video)
+             video-text (text :editable? false
+                              :multi-line? true
+                              :font "MONOSPACED-PLAIN-14"
+                              :id :txtvideo)
              regs-first-col (vertical-panel :items [(make-reg-panel "A:" :reg-a)
                                                     (make-reg-panel "B:" :reg-b)
                                                     (make-reg-panel "C:" :reg-c)
@@ -93,7 +120,7 @@
              panel (border-panel :north (horizontal-panel :items
                                                           [load-button run-button
                                                            step-button reset-button])
-                                 :west video-output
+                                 :west video-text
                                  :center memory-text
                                  :south (horizontal-panel :items
                                                           [regs-first-col
