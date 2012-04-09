@@ -1,9 +1,11 @@
 (ns hermit.ui
   (:use (hermit core disassembler cpu)
         (seesaw core font graphics chooser dev))
+  (:import [java.util.concurrent Executors])
   (:gen-class))
 
-(def cpu init-machine)
+(def cpu (atom init-machine))
+(def run-future nil)
 
 (defn make-reg-panel
   [title id] (horizontal-panel :items [(label title) (label :text "0x0000"
@@ -31,7 +33,7 @@
   [c]
   (if (and (> (int c) 32)
 	   (< (int c) 127))
-      (char c)))
+    (char c)))
 
 (defn display-mem
   [f m] (config! (select f [:#mem])
@@ -63,7 +65,10 @@
   "Creates the UI."
   [] (do
        (native!)
-       (let [f (frame :title "Hermit DCPU-16 Emulator")
+       (let [f (frame :title "Hermit DCPU-16 Emulator"
+                      :width 1000 :height 1000
+                      :on-close :dispose
+                      :visible? true)
              load-button (button :text "Load" :id :load-button)
              run-button (button :text "Run")
              step-button (button :text "Step")
@@ -71,7 +76,8 @@
              memory-text (scrollable (text :multi-line? true
                                            :font "MONOSPACED-PLAIN-14"
                                            :id :mem))
-             video-output (canvas :size [250 :by 250])
+             video-output (canvas :size [250 :by 250]
+                                  :id :video)
              regs-first-col (vertical-panel :items [(make-reg-panel "A:" :reg-a)
                                                     (make-reg-panel "B:" :reg-b)
                                                     (make-reg-panel "C:" :reg-c)
@@ -96,15 +102,24 @@
          (config! f :content panel :size [750 :by 500])
          (listen load-button :action (fn [x] (if-let [file (choose-file f)]
                                               (do
-                                               (def cpu (load-data-file cpu 0 file))
-                                               (update-display f cpu)))))
-         (listen step-button :action (fn [x] (do (def cpu (step cpu))
-                                                (update-display f cpu))))
-         (listen reset-button :action (fn [x] (do (def cpu init-machine)
-                                                 (update-display f cpu))))
-         (listen run-button :action (fn [x] (alert f "Not Impl'd")))
+                                                (swap! cpu (fn [m] (load-data-file m 0 file)))
+                                                (update-display f @cpu)))))
+         (listen step-button :action (fn [x] (do (swap! cpu step)
+                                                (update-display f @cpu))))
+         (listen reset-button :action (fn [x] (do (swap! cpu (fn [_] init-machine))
+                                                 (update-display f @cpu))))
+         (listen run-button :action (fn [x] (if run-future
+                                             (do (future-cancel run-future)
+                                                 (def run-future nil)
+                                                 (config! run-button :text "Run"))
+                                             (do (def run-future
+                                                   (future (loop [] (Thread/sleep 10)
+                                                                 (swap! cpu step)
+                                                                 (update-display f @cpu)
+                                                                 (recur))))
+                                                 (config! run-button :text "Stop")))))
          (seesaw.dev/debug!) 
-         (-> f pack! show!)
+         (-> f show!)
          f)))
 
 (defn -main
