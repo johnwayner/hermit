@@ -152,9 +152,10 @@
               :add (fn [a b] [(+ a b) (if (> (+ a b) 0xFFFF) 1 0)])
               :sub (fn [a b] [(- a b) (if (< (- a b) 0) 1 0)])
               :mul (fn [a b] (let [p (* a b)] [(bit-and 0xFFFF p)
-                                                (bit-and 0xFFFF (bit-shift-right p 16))]))  
-              :div (fn [a b] (let [d (/ a b)] [(bit-and 0xFFFF d)
-                                                (if (= 0 b)
+                                              (bit-and 0xFFFF (bit-shift-right p 16))]))
+
+              :div (fn [a b] (let [d (int (/ a b))] [(if (= b 0) 0 (bit-and 0xFFFF d))
+                                                (if (= b 0)
                                                   0
                                                   (bit-and 0xFFFF (/ (bit-shift-left a 16) b)))]))
               :mod (non-overflow-op mod)
