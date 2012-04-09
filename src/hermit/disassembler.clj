@@ -1,12 +1,29 @@
 (ns hermit.disassembler
   (:use (hermit core)))
 
-(def ops [[:ext 0]
-          [:set 1]
-          [:add 2] [:sub 2] [:mul 2] [:div 3] [:mod 3]
-          [:shl 2] [:shr 2]
-          [:and 1] [:bor 1] [:xor 1]
-          [:ife 2] [:ifn 2] [:ifg 2] [:ifb 2]])
+(def ops [:ext
+          :set
+          :add :sub :mul :div :mod
+          :shl :shr
+          :and :bor :xor
+          :ife :ifn :ifg :ifb])
+(def op-props {:ext {:cost 0}
+               :set {:cost 1}
+               :add {:cost 2}
+               :sub {:cost 2}
+               :mul {:cost 2}
+               :div {:cost 3}
+               :mod {:cost 3}               
+               :shl {:cost 2}
+               :shr {:cost 2}
+               :and {:cost 1}
+               :bor {:cost 1}
+               :xor {:cost 1}
+               :ife {:cost 2}
+               :ifn {:cost 2}
+               :ifg {:cost 2}
+               :ifb {:cost 2}})
+               
 (def ops-exts [:ext :jsr])
 
 (def op-vals (into [:a :b :c :x :y :z :i :j
@@ -30,7 +47,7 @@
 
 (defn op
   "Get operator from word."
-  [w] (let [[op cyc-count] (ops (bit-and 0xF w))]
+  [w] (let [op (ops (bit-and 0xF w))]
         (if (= :ext op)
           (let [ext-idx (bit-shift-right (bit-and 2r0000001111110000 w) 4)]
             (if (< ext-idx (count ops-exts))
@@ -84,6 +101,15 @@
             (assoc i :b (assoc (:b i) :nxt w))
             i)))
 
+(defn instr-cycle-count
+  "Returns the number of cycles an instruction will take.
+Note: Assumes branches succeed."
+  [i] (let [{cost :cost} ((:op i) op-props)]
+        (reduce + cost  (map #(if (op-val-needs-next (% i))
+                                1
+                                0)
+                             [:a :b]))))
+          
 (defn op-val-key-to-str
   ""
   [vk] (last (re-find #"^:(.)" (str vk))))

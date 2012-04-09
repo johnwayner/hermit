@@ -18,19 +18,21 @@
     (char c)))
 
 (defn display-video
-  [f m] (config! (select f [:#txtvideo]) :text
-                 (apply str
-                        (interleave (map #(reduce (fn [a b] (if (printable-char? (bit-and 0xFF b))
-                                                             (str a (char  (bit-and 0xFF b))) 
-                                                    (str a " ")))
-                                                  ""
-                                                  %) 
-                                         (partition video-display-width
-                                                    (mem-val m
-                                                             video-ram-loc
-                                                             (* video-display-height
-                                                                video-display-width))))
-                                    (repeat "\n")))))
+  [f m]
+  (config!
+   (select f [:#txtvideo]) :text
+   (apply str
+          (interleave (map #(reduce (fn [a b] (if (printable-char? (bit-and 0xFF b))
+                                               (str a (char  (bit-and 0xFF b))) 
+                                               (str a " ")))
+                                    ""
+                                    %) 
+                           (partition video-display-width
+                                      (mem-val m
+                                               video-ram-loc
+                                               (* video-display-height
+                                                  video-display-width))))
+                      (repeat "\n")))))
 
 (defn make-reg-panel
   [title id] (horizontal-panel :items [(label title) (label :text "0x0000"
@@ -76,7 +78,7 @@
                                                    false)
                                      "\n")
                                ""
-                               (sort (keys (:mem m))))))
+                               (sort (map #(if (< % 0) (+ 0xFFFF %) %) (keys (:mem m)))))))
 (defn update-display
   [f m] (do
           (display-regs f m)
@@ -128,23 +130,22 @@
                                  :vgap 5 :hgap 5 :border 5)]
          (config! f :content panel :size [750 :by 500])
          (listen load-button :action (fn [x] (if-let [file (choose-file f)]
-                                              (do
-                                                (swap! cpu (fn [m] (load-data-file m 0 file)))
-                                                (update-display f @cpu)))))
-         (listen step-button :action (fn [x] (do (swap! cpu step)
-                                                (update-display f @cpu))))
-         (listen reset-button :action (fn [x] (do (swap! cpu (fn [_] init-machine))
-                                                 (update-display f @cpu))))
+                                              (swap! cpu (fn [m] (load-data-file m 0 file))))))
+         (listen step-button :action (fn [x] (swap! cpu step)))
+         (listen reset-button :action (fn [x] (swap! cpu (fn [_] init-machine))))
          (listen run-button :action (fn [x] (if run-future
                                              (do (future-cancel run-future)
                                                  (def run-future nil)
                                                  (config! run-button :text "Run"))
                                              (do (def run-future
-                                                   (future (loop [] (Thread/sleep 10)
+                                                   (future (loop [] (Thread/sleep 1)
                                                                  (swap! cpu step)
-                                                                 (update-display f @cpu)
                                                                  (recur))))
                                                  (config! run-button :text "Stop")))))
+         (def update-display-future
+           (future (loop [] (Thread/sleep 100)
+                         (update-display f @cpu)
+                         (recur))))
          (seesaw.dev/debug!) 
          (-> f show!)
          f)))

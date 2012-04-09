@@ -38,7 +38,7 @@
 
 (defn mem-set
   "Returns new memory for machine with location l set to v."
-  [m l v] (assoc (:mem m) l v))
+  [m l v] (assoc (:mem m) l (bit-and 0xFFFF v)))
 
 (defn machine-with-mem-set
   [m l v] (merge m {:mem (mem-set m l v)}))
@@ -60,6 +60,11 @@
 (defn reg-from-regop-kw
   "There must be a better way... :("
   [kw] (keyword (str (first (name kw)))))
+
+(defn machine-with-cycle-delta
+  "Advances the cycle count for a machine by 1 or d."
+  ([m d] (assoc m :cycle (+ (:cycle m) d)))
+  ([m] (machine-with-cycle-delta m 1)))
 
 ;;stack stuff
 (defn machine-with-stack-push
@@ -140,10 +145,10 @@
                m1)))
 
 (defn apply-func-to-branch-ops
-  [m i f]  (machine-with-reg-delta m :pc (if (f (get-op-val-value m (:a i))
-                                                (get-op-val-value m (:b i)))
-                                           0
-                                           (instruction-size (next-instr m)))))
+  [m i f]  (if-let [result (f (get-op-val-value m (:a i))
+                           (get-op-val-value m (:b i)))]
+             (machine-with-reg-delta m :pc (instruction-size (next-instr m)))
+             (machine-with-cycle-delta m 1))) ;pay if check penalty
 
 (defn non-overflow-op
   [f] (fn [a b] [(f a b) nil]))
@@ -176,7 +181,6 @@
                      :ifg >
                      :ifb #(> (bit-and %1 %2) 0)})
 
-
 (defn step
   "Steps a machine one instruction."
   [m] (let [i (next-instr m)
@@ -199,8 +203,11 @@
                                                   ">"))
                                     m)
                        )]
-        (case (:val (:b i))
-          ;; fix sp when stack used as val
-          :pop (machine-with-reg-delta post-op-m :sp 1)
-          :push (machine-with-reg-delta post-op-m :sp -1)
-          post-op-m)))
+        (let [next-m  (case (:val (:b i))
+                   ;; fix sp when stack used as val
+                   :pop (machine-with-reg-delta post-op-m :sp 1)
+                   :push (machine-with-reg-delta post-op-m :sp -1)
+                   post-op-m)]
+          next-m
+          ;(machine-with-cycle-delta next-m (instr-cycle-count i))
+          )))
