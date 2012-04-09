@@ -11,7 +11,7 @@
                                                             :font "MONOSPACED-PLAIN-14")]))
 
 (defn get-mem-display
-  [value] (String/format "0x%04X" (to-array [value])))
+  [value] (String/format "0x%04X" (to-array [(bit-and 0xFFFF value)])))
 
 (defn get-reg-display
   [m rk] (get-mem-display (reg-val m rk)))
@@ -37,7 +37,7 @@
   [f m] (config! (select f [:#mem])
                  :text (reduce #(str %1
                                      (if (= %2 (reg-val m :pc))
-                                       "->"
+                                       "=>"
                                        "  ")
                                      " "
                                      (get-mem-display %2) ": "
@@ -55,8 +55,9 @@
                                ""
                                (sort (keys (:mem m))))))
 (defn update-display
-  [f m] (do (display-regs f m)
-            (display-mem f m)))
+  [f m] (do
+          (display-regs f m)
+          (display-mem f m)))
 
 (defn setup-ui
   "Creates the UI."
