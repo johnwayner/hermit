@@ -59,9 +59,11 @@
 
 (defn op-val-reads-next
   "Returns true if the op-val requires a read of the next word; nil otherwise."
-  [val]
-  (if (re-seq #"nxt" (str {:val val}))
-    true))
+  [{val :val}]
+  (contains? #{:a-ptr-nxt :b-ptr-nxt :c-ptr-nxt
+               :x-ptr-nxt :y-ptr-nxt :z-ptr-nxt
+               :i-ptr-nxt :j-ptr-nxt
+               :ptr-nxt :nxt} val))
 
 (defn op-val-needs-next
   "Returns true if op-val v reads next, but doesn't have one yet."

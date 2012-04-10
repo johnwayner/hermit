@@ -82,7 +82,7 @@
 (defn update-display
   [f m] (do
           (display-regs f m)
-          (display-mem f m)
+;          (display-mem f m)
           (display-video f m)))
 
 (defn setup-ui
@@ -97,6 +97,8 @@
              run-button (button :text "Run")
              step-button (button :text "Step")
              reset-button (button :text "Reset")
+             auto-refresh-button (button :text "Toggle Auto Refresh")
+             refresh-button (button :text "Refresh")
              memory-text (scrollable (text :multi-line? true
                                            :editable? false
                                            :font "MONOSPACED-PLAIN-14"
@@ -121,7 +123,9 @@
                                                      (make-reg-panel " O:" :reg-o)])
              panel (border-panel :north (horizontal-panel :items
                                                           [load-button run-button
-                                                           step-button reset-button])
+                                                           step-button reset-button
+                                                           auto-refresh-button
+                                                           refresh-button])
                                  :west video-text
                                  :center memory-text
                                  :south (horizontal-panel :items
@@ -138,14 +142,13 @@
                                                  (def run-future nil)
                                                  (config! run-button :text "Run"))
                                              (do (def run-future
-                                                   (future (loop [] (Thread/sleep 1)
+                                                   (future (loop [] 
                                                                  (swap! cpu step)
                                                                  (recur))))
                                                  (config! run-button :text "Stop")))))
-         (def update-display-future
-           (future (loop [] (Thread/sleep 100)
-                         (update-display f @cpu)
-                         (recur))))
+         (listen refresh-button :action (fn [x] (do (update-display f @cpu)
+                                                   (display-mem f @cpu))))
+         (add-watch cpu :disp (fn [_ _ _ m] (update-display f m)))
          (seesaw.dev/debug!) 
          (-> f show!)
          f)))
