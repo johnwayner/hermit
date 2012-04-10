@@ -22,7 +22,9 @@
                :ife {:cost 2}
                :ifn {:cost 2}
                :ifg {:cost 2}
-               :ifb {:cost 2}})
+               :ifb {:cost 2}
+
+               :jsr {:cost 2}})
                
 (def ops-exts [:ext :jsr])
 
