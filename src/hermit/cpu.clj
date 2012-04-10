@@ -14,8 +14,9 @@
                 :sp 0,
                 :pc 0})
 (def init-mem {})
-
+(def key-input-loc 0x9000)
 (def init-machine {:cycle 0
+                   :key-input-offset 0
                    :regs init-regs
                    :mem init-mem})
 
@@ -58,6 +59,12 @@
 
 (defn machine-with-reg-delta
   [m rk d] (merge m {:regs (reg-set m rk (+ d (reg-val m rk)))}))
+
+(defn machine-with-key-input
+  [m c] (assoc 
+          (machine-with-mem-set m
+            (+ key-input-loc (:key-input-offset m)) c)
+          :key-input-offset (mod (+ 1 (:key-input-offset m)) 16)))
 
 (defn reg-from-regop-kw
   "There must be a better way... :("

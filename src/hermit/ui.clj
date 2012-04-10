@@ -21,18 +21,19 @@
   [f m]
   (config!
    (select f [:#txtvideo]) :text
-   (apply str
-          (interleave (map #(reduce (fn [a b] (if (printable-char? (bit-and 0xFF b))
-                                               (str a (char  (bit-and 0xFF b))) 
-                                               (str a " ")))
-                                    ""
-                                    %) 
-                           (partition video-display-width
-                                      (mem-val m
-                                               video-ram-loc
-                                               (* video-display-height
-                                                  video-display-width))))
-                      (repeat "\n")))))
+   (str (apply str
+               (interleave (map #(reduce (fn [a b] (if (printable-char? (bit-and 0xFF b))
+                                                    (str a (char  (bit-and 0xFF b))) 
+                                                    (str a " ")))
+                                         ""
+                                         %) 
+                                (partition video-display-width
+                                           (mem-val m
+                                                    video-ram-loc
+                                                    (* video-display-height
+                                                       video-display-width))))
+                           (repeat "\n")))
+        "[Click here to send keyboard input to cpu.]")))
 
 (defn make-reg-panel
   [title id] (horizontal-panel :items [(label title) (label :text "0x0000"
@@ -149,6 +150,10 @@
          (listen refresh-button :action (fn [x] (do (update-display f @cpu)
                                                    (display-mem f @cpu))))
          (add-watch cpu :disp (fn [_ _ _ m] (update-display f m)))
+         (listen (select f [:#txtvideo])
+                 :key-typed (fn [e] (swap! cpu #(machine-with-key-input
+                                                 %
+                                                 (int (.getKeyChar e))))))
          (seesaw.dev/debug!) 
          (-> f show!)
          f)))
