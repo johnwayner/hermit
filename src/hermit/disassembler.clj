@@ -60,10 +60,18 @@
 (defn op-val-reads-next
   "Returns true if the op-val requires a read of the next word; nil otherwise."
   [{val :val}]
-  (contains? #{:a-ptr-nxt :b-ptr-nxt :c-ptr-nxt
-               :x-ptr-nxt :y-ptr-nxt :z-ptr-nxt
-               :i-ptr-nxt :j-ptr-nxt
-               :ptr-nxt :nxt} val))
+  (case val
+    (:a-ptr-nxt
+     :b-ptr-nxt
+     :c-ptr-nxt
+     :x-ptr-nxt
+     :y-ptr-nxt
+     :z-ptr-nxt
+     :i-ptr-nxt
+     :j-ptr-nxt
+     :ptr-nxt
+     :nxt) true
+     false))
 
 (defn op-val-needs-next
   "Returns true if op-val v reads next, but doesn't have one yet."
@@ -163,6 +171,8 @@ Note: Assumes branches succeed."
                     (conj % (instruction %2))))
                []
                ws))
+
+(def disassemble-memoized (memoize disassemble))
 
 (defn disassemble-file
   "Slurp a file and diassemble it."
