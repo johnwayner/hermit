@@ -19,6 +19,12 @@
 	   (< (int c) 127))
     (char c)))
 
+(defn video-ram
+  [m] (mem-val m
+               video-ram-loc
+               (* video-display-height
+                  video-display-width)))
+
 (defn display-video
   [f m]
   (config!
@@ -30,10 +36,7 @@
                                          ""
                                          %) 
                                 (partition video-display-width
-                                           (mem-val m
-                                                    video-ram-loc
-                                                    (* video-display-height
-                                                       video-display-width))))
+                                           (video-ram m)))
                            (repeat "\n")))
         "[Click here to send keyboard input to cpu.]")))
 
@@ -43,7 +46,7 @@
                                                             :font "MONOSPACED-PLAIN-14")]))
 
 (defn get-mem-display
-  [value] (String/format "0x%04X" (to-array [(bit-and 0xFFFF value)])))
+  [value] (String/format "0x%04X  " (to-array [(bit-and 0xFFFF value)])))
 
 (defn get-reg-display
   [m rk] (get-mem-display (reg-val m rk)))
@@ -88,6 +91,10 @@
 ;          (display-mem f m)
           (display-video f m)))
 
+(def run-future nil)
+(def run-start-time nil)
+(def run-start-cycle (:cycle @cpu))
+
 (defn setup-ui
   "Creates the UI."
   [] (do
@@ -118,12 +125,13 @@
                                                     (make-reg-panel "X:" :reg-x)
                                                     (make-reg-panel "Y:" :reg-y)
                                                     (make-reg-panel "Z:" :reg-z)])
-             regs-second-col (vertical-panel :items [
-                                                     (make-reg-panel " I:" :reg-i)
+             regs-second-col (vertical-panel :items [(make-reg-panel " I:" :reg-i)
                                                      (make-reg-panel " J:" :reg-j)
                                                      (make-reg-panel "PC:" :reg-pc)
                                                      (make-reg-panel "SP:" :reg-sp)
                                                      (make-reg-panel " O:" :reg-o)])
+             speed-label (label :id :speed)
+             extra-monitoring-col (vertical-panel :items [speed-label])
              panel (border-panel :north (horizontal-panel :items
                                                           [load-button run-button
                                                            step-button reset-button
@@ -133,25 +141,42 @@
                                  :center memory-text
                                  :south (horizontal-panel :items
                                                           [regs-first-col
-                                                           regs-second-col])
+                                                           regs-second-col
+                                                           extra-monitoring-col])
                                  :vgap 5 :hgap 5 :border 5)]
          (config! f :content panel :size [750 :by 500])
          (listen load-button :action (fn [x] (if-let [file (choose-file f)]
                                               (swap! cpu (fn [m] (load-data-file m 0 file))))))
          (listen step-button :action (fn [x] (swap! cpu step)))
          (listen reset-button :action (fn [x] (swap! cpu (fn [_] init-machine))))
-         (listen run-button :action (fn [x] (if run-future
+         (listen run-button :action (fn [x] (if run-start-time
                                              (do (future-cancel run-future)
-                                                 (def run-future nil)
+                                                 (def run-start-time nil)
+
                                                  (config! run-button :text "Run"))
-                                             (do (def run-future
+                                             (do (def run-start-time (System/currentTimeMillis))
+                                                 (def run-start-cycle (:cycle @cpu))
+                                                 (def run-future
                                                    (future (loop [] 
-                                                                 (swap! cpu step)
-                                                                 (recur))))
+                                                             (swap! cpu step)
+                                                             (recur))))
                                                  (config! run-button :text "Stop")))))
          (listen refresh-button :action (fn [x] (do (update-display f @cpu)
                                                    (display-mem f @cpu))))
-         (add-watch cpu :disp (fn [_ _ _ m] (update-display f m)))
+         (add-watch cpu :disp (fn [_ _ mo mn]
+                                (if (not (= (video-ram mo) (video-ram mn)))
+                                  (update-display f mn)
+                                  (display-regs f mn))))
+         (add-watch cpu :cycle-disp (fn [_ _ _ m]
+                                      (if run-start-time
+                                        (config! speed-label :text
+                                                 (str (float  (/ (- (:cycle m)
+                                                                    run-start-cycle)
+                                                                 (/ 
+                                                                  (- (System/currentTimeMillis)
+                                                                     run-start-time)
+                                                                  1000)))
+                                                      " kHz")))))
          (listen (select f [:#txtvideo])
                  :key-typed (fn [e] (swap! cpu #(machine-with-key-input
                                                  %
@@ -162,9 +187,8 @@
 
 (defn -main
   ([] (setup-ui))
-  ([file-name] (doall (iterate #(do (let [c (:cycle %)]
-                                      (if (= 0 (mod c 5000)) (println c)))
-                                    (Thread/sleep 100)
+  ([file-name] (dorun (iterate #(do (let [c (:cycle %)]
+                                      (if (> (mod c 5000) 4996) (println c)))
                                     (step %))
                                (load-data-file init-machine 0 file-name)))))
 
