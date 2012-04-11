@@ -30,8 +30,8 @@
 
 (defn mem-val
   "Returns the value of memory location l in machine m."
-  ([m l] (if-let [v (find (:mem m) (long l))]
-           (val v)
+  ([m l] (if-let [v (get (:mem m) (long l))]
+           v
            0))
   ([m l c] (map (partial mem-val m)
                 (range l (+ l c)))))
@@ -40,11 +40,11 @@
 (defn mem-set
   "Returns new memory for machine with location l set to v."
   [m l v] (if (= v 0)
-            (dissoc (:mem m) (long l))
-            (assoc (:mem m) (long l) (bit-and 0xFFFF v))))
+            (dissoc! (:mem m) (long l))
+            (assoc! (:mem m) (long l) (bit-and 0xFFFF v))))
 
 (defn machine-with-mem-set
-  [m l v] (merge m {:mem (mem-set m l v)}))
+  [m l v] (assoc! m :mem (mem-set m l v)))
 
 (defn reg-val
   "Retruns the value of register-keyword rk (:a, :b, etc) in machine m."
@@ -52,13 +52,13 @@
 
 (defn reg-set
   "Returns new regs for machine with reg rk set to v."
-  [m rk v] (assoc (:regs m) rk (bit-and 0xFFFF v)))
+  [m rk v] (assoc! (:regs m) rk (bit-and 0xFFFF v)))
 
 (defn machine-with-reg-set
-  [m rk v] (merge m {:regs (reg-set m rk v)}))
+  [m rk v] (assoc! m :regs (reg-set m rk v)))
 
 (defn machine-with-reg-delta
-  [m rk d] (merge m {:regs (reg-set m rk (+ d (reg-val m rk)))}))
+  [m rk d] (assoc! m :regs (reg-set m rk (+ d (reg-val m rk)))))
 
 (defn machine-with-key-input
   [m c] (assoc 
@@ -72,7 +72,7 @@
 
 (defn machine-with-cycle-delta
   "Advances the cycle count for a machine by 1 or d."
-  ([m d] (assoc m :cycle (+ (:cycle m) d)))
+  ([m d] (assoc! m :cycle (+ (:cycle m) d)))
   ([m] (machine-with-cycle-delta m 1)))
 
 ;;stack stuff
@@ -270,11 +270,22 @@
                      [m nil nil]
                    plan))
 
+(defn make-transient-machine
+  [m] (transient (merge m
+                        {:mem (transient (:mem m))}
+                        {:regs (transient (:regs m))})))
+
+(defn make-persistent-machine
+  [tm] (persistent! (assoc! tm
+                            :mem (persistent! (:mem tm))
+                            :regs (persistent! (:regs tm)))))
+
 (defn step
   "Steps a machine one instruction."
-  [m] (let [i (next-instr m)
+  [m] (let [trans-m (make-transient-machine m)
+            i (next-instr trans-m)
             op (:op i)
-            [post-plan-m a b] (execute-plan m i (pre-op-plan-for-instruction i))
+            [post-plan-m a b] (execute-plan trans-m i (pre-op-plan-for-instruction i))
             post-op-m (cond
                        (op ops-map) (apply-func-to-ops post-plan-m i (op ops-map) a b)
                        (op branch-ops-map) (apply-func-to-branch-ops post-plan-m i (op branch-ops-map) a b)
@@ -291,6 +302,6 @@
                                                   ">"))
                                     m)
                        )]
-        (machine-with-cycle-delta post-op-m (:cost (op op-props)))))
+        (make-persistent-machine (machine-with-cycle-delta post-op-m (:cost (op op-props))))))
 
 (defn nth-step [n m] (last (take (+ 1 n) (iterate step m))))
