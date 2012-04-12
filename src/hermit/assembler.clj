@@ -61,20 +61,23 @@
      resolved-literal {:val (ify-operand operand "-nxt") :nxt resolved-literal}
      :default {:val operand})))
 
+(defn dasm-ptr
+  [{:keys [operand literal]}] (if (= operand :literal)
+                                {:operand :ptr :literal literal }
+                                {:operand (ify-operand operand "-ptr")
+                                 :literal literal}))
+
 (defn prepare-operand
   [operand] (cond
+             (= (symbol "ptr") (first operand)) (dasm-ptr
+                                                 (prepare-operand (second operand)))
              (map? operand) operand
              (keyword? operand) {:operand operand}
              (symbol? operand) {:operand (keyword operand)}
              :default {:operand :literal
                        :literal operand}))
 
-(defn dasm-ptr
-  [operand] (let [{p-operand :operand p-literal :literal} (prepare-operand operand)]
-              (if (= p-operand :literal)
-                {:operand :ptr :literal p-literal }
-                {:operand (ify-operand p-operand "-ptr")
-                 :literal p-literal})))
+
 
 (defn dasm-op
   [op a b env] (let [asm-a (dasm-operand a env)
@@ -85,8 +88,9 @@
                   (if-let [b-word (:nxt asm-b)]
                     b-word)]))
 
-(defmacro asm
-  [&body] (for [[op a b] body]
-            `(encode-iml (first (~(symbol (str "dasm-" op))
-                                 ~(prepare-operand a)
-                                 ~(prepare-operand b) {})))))
+(defmacro asm [& body] `(vector
+                        ~@(for [[op a b] body]
+                            `(encode-iml (first (dasm-op ~(keyword op)
+                                                         ~(prepare-operand a)
+                                                         ~(prepare-operand b)
+                                                         {}))))))
