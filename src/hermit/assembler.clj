@@ -42,3 +42,51 @@
             0x0000
             (:offsets omap))))
 
+
+;;; Now code to convert lispy looking stuff to iml
+
+(defn ify-operand
+  [operand ify] (keyword (str (name operand) ify)))
+
+(defn dasm-operand
+  [{:keys [operand literal]} env]
+  (let [resolved-literal (if-let [env-l (env literal)]
+                           env-l
+                           literal)]
+    (cond
+     (= :literal operand) (if (> resolved-literal 0x1f)
+                            {:val :nxt :nxt resolved-literal}
+                            {:val :literal-20 :literal (+ 0x20 resolved-literal)})
+     (= :ptr operand) {:val :ptr :nxt resolved-literal}
+     resolved-literal {:val (ify-operand operand "-nxt") :nxt resolved-literal}
+     :default {:val operand})))
+
+(defn prepare-operand
+  [operand] (cond
+             (map? operand) operand
+             (keyword? operand) {:operand operand}
+             (symbol? operand) {:operand (keyword operand)}
+             :default {:operand :literal
+                       :literal operand}))
+
+(defn dasm-ptr
+  [operand] (let [{p-operand :operand p-literal :literal} (prepare-operand operand)]
+              (if (= p-operand :literal)
+                {:operand :ptr :literal p-literal }
+                {:operand (ify-operand p-operand "-ptr")
+                 :literal p-literal})))
+
+(defn dasm-op
+  [op a b env] (let [asm-a (dasm-operand a env)
+                     asm-b (dasm-operand b env)]
+                 [{:op op :a asm-a :b asm-b}
+                  (if-let [a-word (:nxt asm-a)]
+                    a-word)
+                  (if-let [b-word (:nxt asm-b)]
+                    b-word)]))
+
+(defmacro asm
+  [&body] (for [[op a b] body]
+            `(encode-iml (first (~(symbol (str "dasm-" op))
+                                 ~(prepare-operand a)
+                                 ~(prepare-operand b) {})))))
