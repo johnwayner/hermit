@@ -54,23 +54,31 @@
                            env-l
                            literal)]
     (cond
+     (and (= :literal operand)
+          (nil? literal)) {:val :doesntmatter}
      (= :literal operand) (if (> resolved-literal 0x1f)
                             {:val :nxt :nxt resolved-literal}
-                            {:val :literal-20 :literal (+ 0x20 resolved-literal)})
-     (= :ptr operand) {:val :ptr :nxt resolved-literal}
+                            {:val :literal-20 :literal resolved-literal})
+     (= :ptr operand) {:val :ptr-nxt :nxt resolved-literal}
      resolved-literal {:val (ify-operand operand "-nxt") :nxt resolved-literal}
      :default {:val operand})))
 
 (defn dasm-ptr
-  [{:keys [operand literal]}] (if (= operand :literal)
-                                {:operand :ptr :literal literal }
-                                {:operand (ify-operand operand "-ptr")
-                                 :literal literal}))
+  ([{:keys [operand literal]}] (if (= operand :literal)
+                                  {:operand :ptr :literal literal }
+                                  {:operand (ify-operand operand "-ptr")
+                                   :literal literal}))
+  ([operand literal] (if literal
+                       (assoc (dasm-ptr operand) :literal literal)
+                       (dasm-ptr operand))))
 
 (defn prepare-operand
   [operand] (cond
-             (= (symbol "ptr") (first operand)) (dasm-ptr
-                                                 (prepare-operand (second operand)))
+             (and (seq? operand)
+                  (= (symbol "ptr")
+                     (first operand))) (dasm-ptr (prepare-operand (second operand))
+                                                 (first (nnext operand)))
+
              (map? operand) operand
              (keyword? operand) {:operand operand}
              (symbol? operand) {:operand (keyword operand)}
@@ -88,9 +96,26 @@
                   (if-let [b-word (:nxt asm-b)]
                     b-word)]))
 
-(defmacro asm [& body] `(vector
-                        ~@(for [[op a b] body]
-                            `(encode-iml (first (dasm-op ~(keyword op)
-                                                         ~(prepare-operand a)
-                                                         ~(prepare-operand b)
-                                                         {}))))))
+(defmacro asm [& body]
+  `(filter (comp not nil?) 
+           (flatten (vector
+                     ~@(for [[op a b] body]
+                         `(map #(cond
+                                 (map? %) (encode-iml %)
+                                 :default %)
+                               (dasm-op ~(keyword op)
+                                        ~(prepare-operand a)
+                                        ~(prepare-operand b)
+                                        {})))))))
+
+(comment (map (comp println instr-to-str) (disassemble (asm
+                    (set (ptr x) y)
+                    (mul (ptr x 0xbeef) a)
+                    (set x (ptr z))
+                    (jsr b)
+                    (set a 0x30)
+                    (set (ptr 0x1000) 0x20)
+                    (sub a (ptr 0x1000))
+                    (ifn a 0x10)
+                    (set pc 0x1f)))))
+
