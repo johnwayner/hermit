@@ -90,7 +90,7 @@
     (case val
       :ptr-nxt (mem-val m (:nxt op-val))
       :nxt (:nxt op-val)
-      :lit (:literal op-val)
+      :literal-20 (:literal op-val)
       (:a-ptr-nxt
        :b-ptr-nxt
        :c-ptr-nxt
@@ -120,7 +120,7 @@
   (let [val (:val op-val)]
     (case val
       :ptr-nxt {:type :mem :val (:nxt op-val)}
-      (:nxt :lit) {:type :nop} ;fail silently as per spec
+      (:nxt :literal-20) {:type :nop} ;fail silently as per spec
       (:a-ptr-nxt
        :b-ptr-nxt
        :c-ptr-nxt

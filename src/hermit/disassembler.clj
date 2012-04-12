@@ -74,14 +74,14 @@
   [w offset] (let [idx (bit-and 0x3f (bit-shift-right w (- 10 offset)))
                    val (op-vals idx)]
                (if (= val :literal-20)
-                 {:val :lit :literal (- idx 0x20)}
+                 {:val :literal-20 :literal (- idx 0x20)}
                  {:val val})))
 
 (defn instruction
   "Returns a map of the instruction defined by w with :op :a :b"
   [w] (let [o (op w)
             a (if (= :unk o)
-                {:val :lit :literal w}
+                {:val :literal-20 :literal w}
                 (op-val w  (if (= :jsr o) 0 6)))
             b (if (or (= :unk o) (= :jsr o)) nil (op-val w 0))]
         {:op o, :a a, :b b, :w w}))
@@ -124,7 +124,7 @@ Note: Assumes branches succeed."
         (cond
          (= :ptr-nxt val) (str "[0x" (Integer/toHexString (:nxt v)) "]")
          (= :nxt val) (str "0x" (Integer/toHexString (:nxt v)))
-         (= :lit val) (str "0x" (Integer/toHexString (:literal v)))
+         (= :literal-20 val) (str "0x" (Integer/toHexString (:literal v)))
          (re-find #":.-ptr-nxt" (str val)) (str "[0x"
                                                 (if (:nxt v)
                                                   (Integer/toHexString (:nxt v))
