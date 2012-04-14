@@ -162,9 +162,21 @@
 
 (defn -main
   ([] (setup-ui))
-  ([file-name] (doall (iterate #(do (let [c (:cycle %)]
-                                      (if (= 0 (mod c 5000)) (println c)))
-                                    (Thread/sleep 100)
-                                    (step %))
-                               (load-data-file init-machine 0 file-name)))))
+  ([file-name iters]
+     (dorun (let [start-time (System/currentTimeMillis)]
+              (print (str "Starting at " start-time "..."))
+              (let [end-cycles (:cycle (nth (iterate step (load-data-file init-machine 0 file-name)) (Integer/parseInt iters)))
+                    end-time (System/currentTimeMillis)]
+                (println (str "\nEnded at " end-time " at cycle "
+                              end-cycles
+                              "\n" (float (/ end-cycles (- end-time
+                                                           start-time)))
+                              "kHz")))))))
+
+(comment ([file-name iters]
+     (dorun (take (Integer/parseInt iters) (iterate #(do (let [c (:cycle %)]
+                                                           (if (< (mod c 5000) 3)
+                                                             (println (str (System/currentTimeMillis) " " c))))
+                                      (step %))
+                                 (load-data-file init-machine 0 file-name))))))
 
