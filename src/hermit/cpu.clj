@@ -30,8 +30,8 @@
 
 (defn mem-val
   "Returns the value of memory location l in machine m."
-  ([m l] (if-let [v (find (:mem m) (long l))]
-           (val v)
+  ([m l] (if-let [v (get (:mem m) (long l))]
+           v
            0))
   ([m l c] (map (partial mem-val m)
                 (range l (+ l c)))))
@@ -40,11 +40,11 @@
 (defn mem-set
   "Returns new memory for machine with location l set to v."
   [m l v] (if (= v 0)
-            (dissoc (:mem m) (long l))
-            (assoc (:mem m) (long l) (bit-and 0xFFFF v))))
+            (dissoc! (:mem m) (long l))
+            (assoc! (:mem m) (long l) (bit-and 0xFFFF v))))
 
 (defn machine-with-mem-set
-  [m l v] (merge m {:mem (mem-set m l v)}))
+  [m l v] (assoc! m :mem (mem-set m l v)))
 
 (defn reg-val
   "Retruns the value of register-keyword rk (:a, :b, etc) in machine m."
@@ -52,13 +52,13 @@
 
 (defn reg-set
   "Returns new regs for machine with reg rk set to v."
-  [m rk v] (assoc (:regs m) rk (bit-and 0xFFFF v)))
+  [m rk v] (assoc! (:regs m) rk (bit-and 0xFFFF v)))
 
 (defn machine-with-reg-set
-  [m rk v] (merge m {:regs (reg-set m rk v)}))
+  [m rk v] (assoc! m :regs (reg-set m rk v)))
 
 (defn machine-with-reg-delta
-  [m rk d] (merge m {:regs (reg-set m rk (+ d (reg-val m rk)))}))
+  [m rk d] (assoc! m :regs (reg-set m rk (+ d (reg-val m rk)))))
 
 (defn machine-with-key-input
   [m c] (assoc 
@@ -72,7 +72,7 @@
 
 (defn machine-with-cycle-delta
   "Advances the cycle count for a machine by 1 or d."
-  ([m d] (assoc m :cycle (+ (:cycle m) d)))
+  ([m d] (assoc! m :cycle (+ (:cycle m) d)))
   ([m] (machine-with-cycle-delta m 1)))
 
 ;;stack stuff
@@ -162,7 +162,7 @@
 
 (defn next-instr
   "Returns the next instruction to be executed."
-  [m] (first (disassemble (mem-val m (reg-val m :pc) 3))))
+  [m] (first (disassemble-memoized (mem-val m (reg-val m :pc) 3))))
 
 (defn apply-func-to-ops
   [m i f a b]  (let [[op-res o-val] (f (get-a-value m a) b)
@@ -243,6 +243,8 @@
        nil []
        [plan-for-evaling-operand])))
 
+
+
 (defn pre-op-plan-for-instruction
   "Returns a vector of machine transformations that need to happen for an instruction to be considered executed."
   [i] (into [{:type :reg-mod
@@ -252,30 +254,45 @@
             (into  (plan-for-op-val (:a i) :a)
                    (plan-for-op-val (:b i) :b))))
 
+(def pre-op-plan-for-instruction-memoized (memoize pre-op-plan-for-instruction))
+
 (defn execute-plan
-  [m i plan] (reduce (fn [[m a b] {:keys [type comment] {:keys [delta reg operand op-val]} :args}]
-                     (case type
-                       :cycle [(machine-with-cycle-delta m delta) a b]
-                       :reg-mod [(machine-with-reg-delta m reg delta) a b]
+  [m i plan] (reduce (fn [[m a b] step]
+                     (case (:type step)
+                       :cycle [(machine-with-cycle-delta m (:delta (:args step))) a b]
+                       :reg-mod [(machine-with-reg-delta m (:reg (:args step)) (:delta (:args step))) a b]
                        :eval (case (:op i)
-                               :jsr [m (get-op-val-value m op-val) b]
+                               :jsr [m (get-op-val-value m (:op-val (:args step))) b]
                                (:ife
                                 :ifn
                                 :ifg
-                                :ifb) (case operand
-                                         :a [m (get-op-val-value m op-val) b]
-                                         :b [m a (get-op-val-value m op-val)])
-                                (case operand
-                                  :a [m (get-a-operand-destination m op-val) b]
-                                  :b [m a (get-op-val-value m op-val)]))))
+                                :ifb) (let [op-val (:op-val (:args step))]
+                                        (case (:operand (:args step))
+                                          :a [m (get-op-val-value m op-val) b]
+                                          :b [m a (get-op-val-value m op-val)]))
+                                (let [op-val (:op-val (:args step))]
+                                  (case (:operand (:args step))
+                                    :a [m (get-a-operand-destination m op-val) b]
+                                    :b [m a (get-op-val-value m op-val)])))))
                      [m nil nil]
-                   plan))
+                     plan))
+
+(defn make-transient-machine
+  [m] (transient (merge m
+                        {:mem (transient (:mem m))}
+                        {:regs (transient (:regs m))})))
+
+(defn make-persistent-machine
+  [tm] (persistent! (assoc! tm
+                            :mem (persistent! (:mem tm))
+                            :regs (persistent! (:regs tm)))))
 
 (defn step
   "Steps a machine one instruction."
-  [m] (let [i (next-instr m)
+  [m] (let [trans-m (make-transient-machine m)
+            i (next-instr trans-m)
             op (:op i)
-            [post-plan-m a b] (execute-plan m i (pre-op-plan-for-instruction i))
+            [post-plan-m a b] (execute-plan trans-m i (pre-op-plan-for-instruction-memoized i))
             post-op-m (cond
                        (op ops-map) (apply-func-to-ops post-plan-m i (op ops-map) a b)
                        (op branch-ops-map) (apply-func-to-branch-ops post-plan-m i (op branch-ops-map) a b)
@@ -292,6 +309,6 @@
                                                   ">"))
                                     m)
                        )]
-        (machine-with-cycle-delta post-op-m (:cost (op op-props)))))
+        (make-persistent-machine (machine-with-cycle-delta post-op-m (:cost (op op-props))))))
 
 (defn nth-step [n m] (last (take (+ 1 n) (iterate step m))))

@@ -4,6 +4,8 @@
   (:import [java.util.concurrent Executors])
   (:gen-class))
 
+(set! *warn-on-reflection* true)
+
 (def video-ram-loc 0x8000)
 (def video-display-width 32)
 (def video-display-height 16)
@@ -159,5 +161,10 @@
          f)))
 
 (defn -main
-  [] (setup-ui))
+  ([] (setup-ui))
+  ([file-name] (doall (iterate #(do (let [c (:cycle %)]
+                                      (if (= 0 (mod c 5000)) (println c)))
+                                    (Thread/sleep 100)
+                                    (step %))
+                               (load-data-file init-machine 0 file-name)))))
 
