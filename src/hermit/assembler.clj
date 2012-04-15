@@ -55,10 +55,11 @@
                            literal)]
     (cond
      (and (= :literal operand)
-          (nil? literal)) {:val :doesntmatter}
-     (= :literal operand) (if (> resolved-literal 0x1f)
-                            {:val :nxt :nxt resolved-literal}
-                            {:val :literal-20 :literal resolved-literal})
+          (nil? resolved-literal)) {:val :doesntmatter}
+          (= :literal operand) (cond
+                                (keyword? resolved-literal) {:val :doesntmatter}
+                                (> resolved-literal 0x1f) {:val :nxt :nxt resolved-literal}
+                                :default {:val :literal-20 :literal resolved-literal})
      (= :ptr operand) {:val :ptr-nxt :nxt resolved-literal}
      resolved-literal {:val (ify-operand operand "-nxt") :nxt resolved-literal}
      :default {:val operand})))
@@ -76,11 +77,19 @@
   [operand] (cond
              (and (seq? operand)
                   (= (symbol "ptr")
-                     (first operand))) (dasm-ptr (prepare-operand (second operand))
-                                                 (first (nnext operand)))
+                     (first operand))) (if (symbol? (second operand))
+                                         (dasm-ptr (prepare-operand (second operand))
+                                                   (first (nnext operand)))
+                                         (dasm-ptr (prepare-operand
+                                                    (first (nnext operand)))
+                                                   (second operand)))
 
              (map? operand) operand
-             (keyword? operand) {:operand operand}
+             (keyword? operand) (if (some #{operand}
+                                          [:a :b :c :x :y :z :i :j :pop :peek :push
+                                           :sp :pc :o])
+                                  {:operand operand}
+                                  {:operand :literal :literal operand})
              (symbol? operand) {:operand (keyword operand)}
              :default {:operand :literal
                        :literal operand}))
@@ -96,17 +105,31 @@
                   (if-let [b-word (:nxt asm-b)]
                     b-word)]))
 
+(defn build-env
+  [asms] (reduce (fn [{:keys [memofs] :as env} [op a b]]
+                   (cond
+                    (keyword? op) (assoc env op memofs) ;label
+                    :default (assoc env :memofs (+ memofs
+                                                   (instruction-size
+                                                    (first (dasm-op op
+                                                                    (prepare-operand a)
+                                                                    (prepare-operand b)
+                                                                    env)))))))
+                 {:memofs 0}
+                 asms))
+
 (defmacro asm [& body]
-  `(filter (comp not nil?) 
-           (flatten (vector
-                     ~@(for [[op a b] body]
-                         `(map #(cond
-                                 (map? %) (encode-iml %)
-                                 :default %)
-                               (dasm-op ~(keyword op)
-                                        ~(prepare-operand a)
-                                        ~(prepare-operand b)
-                                        {})))))))
+  (let [env (build-env body)]
+    `(filter (comp not nil?) 
+             (flatten (vector
+                       ~@(for [[op a b] (filter (comp not keyword? first) body)]
+                           `(map #(cond
+                                   (map? %) (encode-iml %) ;instruction
+                                   :default %)             ;raw byte
+                                 (dasm-op ~(keyword op)
+                                          ~(prepare-operand a)
+                                          ~(prepare-operand b)
+                                          ~env))))))))
 
 (comment (map (comp println instr-to-str) (disassemble (asm
                     (set (ptr x) y)
