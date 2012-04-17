@@ -106,15 +106,18 @@
                     b-word)]))
 
 (defn build-env
-  [asms] (reduce (fn [{:keys [memofs] :as env} [op a b]]
+  [asms] (reduce (fn [{:keys [memofs] :as env} asm]
                    (cond
-                    (keyword? op) (assoc env op memofs) ;label
-                    :default (assoc env :memofs (+ memofs
-                                                   (instruction-size
-                                                    (first (dasm-op op
-                                                                    (prepare-operand a)
-                                                                    (prepare-operand b)
-                                                                    env)))))))
+                    (keyword? asm) (assoc env asm memofs) ;label
+                    :default (let [[op a b] asm]
+                               (assoc env
+                                 :memofs
+                                 (+ memofs
+                                    (instruction-size
+                                     (first (dasm-op op
+                                                     (prepare-operand a)
+                                                     (prepare-operand b)
+                                                     env))))))))
                  {:memofs 0}
                  asms))
 
@@ -122,7 +125,7 @@
   (let [env (build-env body)]
     `(filter (comp not nil?) 
              (flatten (vector
-                       ~@(for [[op a b] (filter (comp not keyword? first) body)]
+                       ~@(for [[op a b] (filter (comp not keyword?) body)]
                            `(map #(cond
                                    (map? %) (encode-iml %) ;instruction
                                    :default %)             ;raw byte
