@@ -1,6 +1,10 @@
 (ns hermit.test.integrated
-  (:use [hermit disassembler assembler cpu])
+  (:use [hermit core disassembler assembler cpu])
   (:use [clojure.test]))
+
+(defn hex [x] (cond
+               (seq? x) (map hex x)
+               :default (Integer/toHexString x)))
 
 (defmacro execute-asm
   ([n & body] `(last (take (+ 1 ~n) (iterate step (load-data init-machine 0 (asm ~@body)))))))
@@ -9,9 +13,9 @@
   [name [iters reg expect] & asm]
   `(deftest ~name (is (= (reg-val (execute-asm ~iters ~@asm) ~reg) ~expect))))
 
-(defn watch-reg
+(defn watch-regs
   "Shows the value of register 'reg' from step 'start' to step 'stop'"
-  ([reg start stop code] (map #(reg-val % reg)
+  ([regs start stop code] (map #(map (fn [reg] (reg-val % reg)) regs)
                          (drop start
                                (take stop
                                      (iterate step (load-data init-machine 0 code)))))))
