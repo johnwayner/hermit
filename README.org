@@ -1,0 +1,118 @@
+#+TITLE:     Hermit DCPU-16 Toolchain
+#+AUTHOR:    Wayne Rittimann, Jr.
+#+EMAIL:     johnwayner@gmail.com
+#+LANGUAGE:  en
+#+OPTIONS:   H:3 num:nil toc:nil \n:nil @:t ::t |:t ^:t -:t f:t *:t <:t
+#+OPTIONS:   TeX:t LaTeX:nil skip:nil d:nil todo:t pri:nil tags:not-in-toc
+#+INFOJS_OPT: view:nil toc:nil ltoc:t mouse:underline buttons:0 path:http://orgmode.org/org-info.js
+#+EXPORT_SELECT_TAGS: export
+#+EXPORT_EXCLUDE_TAGS: noexport
+
+* Hermit
+Hermit is a DCPU-16 Toolchain written in Clojure.
+** DCPU-16
+The DCPU-16 processor is an imaginary processor designed for [[http://0x10c.com/][0x10c]] --
+Notch's new project.
+
+** Toolchain
+This project includes the following
+ - Disassembler
+ - Assembler (with Clojure-y 'syntax')
+ - Emulator
+ - User Interface
+
+*** Disassembler
+There's no external interface to this part of the toolchain.  And,
+honestly, it's probably not very useful to you.  It was written to
+support the emulator.  Although, it helps with testing, too.
+
+*** Assembler
+No command line interface for this, yet...but soon.  You have some
+options from a REPL, however.  The main entry point to the assembler
+is the =hermit.assembler/asm= macro.
+
+Here's an example:
+#+BEGIN_SRC clojure
+(asm
+ (set x 5)
+ :loop
+ (set y 0x30)
+ (add y x)
+ (set (ptr x 0x8000) y)
+ (sub x 1)
+ (ifn x 0)
+ (set pc :loop)
+ (sub pc 1))
+#+END_SRC  
+
+Each for within the =asm= call is either an =(op a b)= operation
+triple or a keyword denoting a label that can be referenced within =a=
+or =b= in instructions.
+
+There are some helper functions in =hermit.core= to help read files
+containing these types of forms and to write the resulting assembled
+words out to a file.
+
+Note that there is some code in =hermit.core= to support writing out
+the unsigned word values that the dcpu-16 exclusively deals with.  Of
+course, Java doesn't have the concept of unsigned values.  So there's
+some code to handle that in there.
+
+*** Emulator
+The code for this is in =hermit.cpu=.  Since this is Clojure, you'll
+be working with immutable =machine= s.  To get an initialized machine,
+use the =init-machine= def.  Now you can do some stuff with your new
+machine.
+**** Registers
+To get the value of a register use =hermit.cpu/reg-val=.
+: (reg-val init-machine :a)  ;=> 0
+
+To set a register =hermit.cpu/machine-with-reg-set=.
+: (machine-with-reg-set init-machine :a 0xbeef) ;=> <machine map>
+This returns a new machine with the A register set to 0xBEEF.
+: (reg-val (machine-with-reg-set init-machine :a 1) :a) ;=> 1
+
+**** Memory
+Similarly you can get and set the value of a memory location.
+: (mem-val (machine-with-mem-set init-machine 0x8000 48) 0x8000) ;=> 48
+
+Also, you can load the machine with the data from a file starting at a
+specific memory location using =hermit.cpu/load-data-file=.
+: (def some-machine (load-data-file init-machine 0 "~/some.bin"))
+
+**** Stepping
+Once you loaded some instructions into the machine you'll naturally
+want to run the machine.  The function for that is =hermit.cpu/step=.
+: ;run from the hermit.test.integrated ns since it :use's everything else
+: (-> init-machine (load-data 0 (asm (set x 7))) step (reg-val :x))
+: ;=>7
+
+The above pretty much exersices the whole toolchain (aside from the
+UI).  It starts with a new machine, loads the result of assembling
+=(set x 7)= into memory location 0, steps the machine one instruction,
+then pulls out the value of register X to ensure it was set properly.
+
+So, step just reads the instruction at PC, executes that instruction
+and returns a new machine representing the result.
+
+
+*** User Interface
+Currently this is really rough.  It currently supports:
+ - load up a binary file into memory location zero.
+ - run the machine (calls step over and over as fast as
+   possible...which isn't very fast at all...maybe 120khz)
+ - step the machine one step
+ - view register values
+ - view memory contents (click refresh XXXX button)
+ - a text display of the video memory area (0x8000) with no color support
+ - ability to enter text into the 16 word keyboard ring buffer at
+   0x9000 
+
+I wouldn't say it's really in a useable state right now.  I do plan on
+focusing on this part of the system now.  It is the reason I wrote
+this thing, after all!
+
+** Legal
+Copyright (C) 2012 Wayne Rittimann, Jr.
+
+Distributed under the Eclipse Public License, the same as Clojure.
