@@ -32,18 +32,18 @@ options from a REPL, however.  The main entry point to the assembler
 is the =hermit.assembler/asm= macro.
 
 Here's an example:
-#+BEGIN_SRC clojure
-(asm
- (set x 5)
- :loop
- (set y 0x30)
- (add y x)
- (set (ptr x 0x8000) y)
- (sub x 1)
- (ifn x 0)
- (set pc :loop)
- (sub pc 1))
-#+END_SRC  
+
+: (asm
+:  (set x 5)
+:  :loop
+:  (set y 0x30)
+:  (add y x)
+:  (set (ptr x 0x8000) y)
+:  (sub x 1)
+:  (ifn x 0)
+:  (set pc :loop)
+:  (sub pc 1))
+
 
 Each for within the =asm= call is either an =(op a b)= operation
 triple or a keyword denoting a label that can be referenced within =a=
