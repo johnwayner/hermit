@@ -1,5 +1,5 @@
 (ns hermit.ui
-  (:use (hermit core disassembler cpu)
+  (:use (hermit core disassembler cpu assembler)
         (seesaw core font graphics chooser dev))
   (:import [java.util.concurrent Executors])
   (:gen-class))
