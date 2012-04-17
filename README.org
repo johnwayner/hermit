@@ -45,7 +45,7 @@ Here's an example:
 :  (sub pc 1))
 
 
-Each for within the =asm= call is either an =(op a b)= operation
+Each form within the =asm= call is either an =(op a b)= operation
 triple or a keyword denoting a label that can be referenced within =a=
 or =b= in instructions.
 
